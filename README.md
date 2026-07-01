@@ -3,7 +3,7 @@
 An automated Python tool to instantly solve WASD QTE and escape boss stuns in Sol's RNG (Roblox).
 
 ## Description
-- **Vietnamese:** Công cụ tự động nhận diện chữ cái (W, A, S, D) trên màn hình và tự động giả lập bấm phím để nhanh chóng thoát khỏi hiệu ứng khống chế (Stun) của Boss trong chế độ Hell Mode của tựa game Sol's RNG trên Roblox.
+- **Vietnamese:** Cong cu tu dong nhan dien chu cai (W, A, S, D) tren man hinh va tu dong gia lap bam phim de nhanh chong thoat khoi hieu ung khong che (Stun) cua Boss trong che do Hell Mode cua tua game Sol's RNG tren Roblox.
 - **English:** An automated Python tool to instantly detect WASD characters on screen and automatically simulate key presses to quickly escape Boss stuns in Sol's RNG Hell Mode (Roblox).
 
 ## Dependencies
@@ -30,6 +30,9 @@ Follow these steps to set up the virtual environment and run the script on your 
 
 4. Run the script:
    `python main.py`
+
+5. Calibrate the screen coordinates:
+   Click the "Calibrate ROIs" button on the tool's interface. Hover your mouse over the center of each QTE slot in the game, then press the numbers 1, 2, 3, 4, and 5 on your keyboard as prompted in the terminal to save the positions.
 
 ## Setting up requirements.txt
 
