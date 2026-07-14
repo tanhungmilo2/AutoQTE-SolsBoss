@@ -1,3 +1,17 @@
+import sys
+
+# ── DPI AWARENESS ────────────────────────────────────────────────────────
+# Phải gọi trước khi import mss/pyautogui (xem giải thích trong main.py)
+if sys.platform == 'win32':
+    import ctypes
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except Exception:
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
+
 import mss
 import numpy as np
 import cv2
