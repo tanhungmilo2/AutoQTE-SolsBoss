@@ -1,12 +1,12 @@
 """
-WASD Recognition Macro - v3.1 (Sliding Window Upgrade)
-------------------------------------------------------------------
+WASD Recognition Macro  ─  v3.1 (Sliding Window Upgrade)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PIPELINE (per slot, ~3 ms total for 5 slots):
-  capture BGRA (Padded) -> red-channel Otsu -> morph-open (kills glow)
-  -> TM_CCOEFF_NORMED with Sliding Window vs cached templates
-  -> Find best match location & crop to FIXED(64x80)
-  -> confidence gate -> Hu-Moments fallback (on cropped) -> key press
-------------------------------------------------------------------
+  capture BGRA (Padded) → red-channel Otsu → morph-open (kills glow)
+  → TM_CCOEFF_NORMED with Sliding Window vs cached templates
+  → Find best match location & crop to FIXED(64×80)
+  → confidence gate → Hu-Moments fallback (on cropped) → key press
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
 from __future__ import annotations
@@ -17,14 +17,16 @@ import keyboard
 import time
 import os
 import sys
+sys.stdout.reconfigure(encoding='utf-8')
+sys.stderr.reconfigure(encoding='utf-8')
 import json
 import logging
 from dataclasses import dataclass, field
 from typing import Optional
 
-# ======================================================================
-#  CONFIGURATION - edit this section only
-# ======================================================================
+# ══════════════════════════════════════════════════════════════════════
+#  CONFIGURATION  ─  edit this section only
+# ══════════════════════════════════════════════════════════════════════
 
 # Kích thước cố định của template (Must match WIDTH/HEIGHT trong generate_templates.py)
 FIXED_W: int = 64
@@ -51,7 +53,7 @@ TEMPLATE_FILES: dict[str, str] = {
     'd': 'slot1_d.png',
 }
 
-# --- ROI Config -------------------------------------------------------
+# ── ROI Config ────────────────────────────────────────────────────────
 ROI_FILE: str   = 'rois.json'          # saved by --calibrate
 HOTKEY: str     = 'e'
 KEYSTROKE_DELAY = 0.05                 # seconds between key presses
@@ -65,9 +67,9 @@ DEFAULT_ROIS: list[tuple] = [
     (868, 390, FIXED_W, FIXED_H),      # Slot 5
 ]
 
-# ======================================================================
+# ══════════════════════════════════════════════════════════════════════
 #  PATHS & LOGGING
-# ======================================================================
+# ══════════════════════════════════════════════════════════════════════
 
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
 DEBUG_DIR  = os.path.join(BASE_DIR, 'debug')
@@ -80,9 +82,9 @@ logging.basicConfig(
 )
 log = logging.getLogger('wasd')
 
-# ======================================================================
+# ══════════════════════════════════════════════════════════════════════
 #  DATA STRUCTURES
-# ======================================================================
+# ══════════════════════════════════════════════════════════════════════
 
 @dataclass
 class SlotResult:
@@ -105,8 +107,8 @@ class SlotResult:
 @dataclass
 class TemplateBank:
     """Holds pre-processed, fixed-size binary templates. Loaded once at startup."""
-    data: dict[str, np.ndarray]       # key -> (FIXED_H x FIXED_W uint8 binary)
-    hu:   dict[str, np.ndarray]       # key -> Hu moment vector (7,) for fallback
+    data: dict[str, np.ndarray]       # key → (FIXED_H×FIXED_W uint8 binary)
+    hu:   dict[str, np.ndarray]       # key → Hu moment vector (7,) for fallback
     keys: list[str] = field(default_factory=list)
 
     @classmethod
@@ -133,24 +135,24 @@ class TemplateBank:
         return cls(data=data, hu=hu, keys=keys)
 
 
-# ======================================================================
+# ══════════════════════════════════════════════════════════════════════
 #  PREPROCESSING
-# ======================================================================
+# ══════════════════════════════════════════════════════════════════════
 
 def preprocess(bgra: np.ndarray) -> np.ndarray:
-    """BGRA -> clean binary (giữ nguyên kích thước truyền vào để chạy trượt)"""
-    r = bgra[:, :, 2]                                                                
+    """BGRA  →  clean binary (giữ nguyên kích thước truyền vào để chạy trượt)"""
+    r = bgra[:, :, 2]                                               
     _, t = cv2.threshold(r, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)       
     t = cv2.morphologyEx(t, cv2.MORPH_OPEN, MORPH_KERNEL)          
     return t 
 
 
-# ======================================================================
-#  RECOGNITION - PRIMARY (Template Matching với Sliding Window)
-# ======================================================================
+# ══════════════════════════════════════════════════════════════════════
+#  RECOGNITION — PRIMARY (Template Matching với Sliding Window)
+# ══════════════════════════════════════════════════════════════════════
 
 def recognize_primary(roi_bin_padded: np.ndarray,
-                     bank: TemplateBank) -> tuple[Optional[str], float, float, np.ndarray]:
+                      bank: TemplateBank) -> tuple[Optional[str], float, float, np.ndarray]:
     """
     Sử dụng Sliding Window để quét tìm vị trí khớp nhất của template trong vùng ảnh rộng.
     Trả về (best_key_or_None, best_score, margin, roi_bin_cropped).
@@ -179,9 +181,9 @@ def recognize_primary(roi_bin_padded: np.ndarray,
     return None, best_s, margin, roi_bin_cropped
 
 
-# ======================================================================
-#  RECOGNITION - FALLBACK (Hu Moments)
-# ======================================================================
+# ══════════════════════════════════════════════════════════════════════
+#  RECOGNITION — FALLBACK (Hu Moments)
+# ══════════════════════════════════════════════════════════════════════
 
 def _compute_hu(binary: np.ndarray) -> np.ndarray:
     """Compute log-scaled Hu moment vector for shape matching."""
@@ -193,7 +195,7 @@ def _compute_hu(binary: np.ndarray) -> np.ndarray:
 
 
 def recognize_fallback(roi_bin: np.ndarray,
-                       bank: TemplateBank) -> tuple[Optional[str], float]:
+                        bank: TemplateBank) -> tuple[Optional[str], float]:
     roi_hu = _compute_hu(roi_bin)
     dists  = {k: float(np.sum(np.abs(roi_hu - bank.hu[k]))) for k in bank.keys}
     best_k = min(dists, key=dists.get)
@@ -205,9 +207,9 @@ def recognize_fallback(roi_bin: np.ndarray,
     return None, best_d
 
 
-# ======================================================================
+# ══════════════════════════════════════════════════════════════════════
 #  FULL SLOT RECOGNITION
-# ======================================================================
+# ══════════════════════════════════════════════════════════════════════
 
 def recognize_slot(roi_bin_padded: np.ndarray,
                    bank: TemplateBank,
@@ -215,27 +217,27 @@ def recognize_slot(roi_bin_padded: np.ndarray,
     """
     Nhận diện toàn diện cho một ô bằng thuật toán cửa sổ trượt.
     """
-    # --- Thuật toán chính (Cửa sổ trượt) ------------------------------
+    # ── Thuật toán chính (Cửa sổ trượt) ──────────────────────────────
     key, score, margin, roi_bin_cropped = recognize_primary(roi_bin_padded, bank)
     if key is not None:
         return SlotResult(key=key, score=score, margin=margin,
                           via='template', slot_idx=slot_idx), roi_bin_cropped
 
-    # --- Thuật toán phụ (Chạy trên ảnh đã được căn giữa tự động) ------
+    # ── Thuật toán phụ (Chạy trên ảnh đã được căn giữa tự động) ──────
     fb_key, fb_dist = recognize_fallback(roi_bin_cropped, bank)
     if fb_key is not None:
         fb_score = 1.0 / (1.0 + fb_dist)
         return SlotResult(key=fb_key, score=fb_score, margin=0.0,
                           via='hu_moments', slot_idx=slot_idx), roi_bin_cropped
 
-    # --- Thất bại ------------------------------------------------------
+    # ── Thất bại ──────────────────────────────────────────────────────
     return SlotResult(key=None, score=score, margin=margin,
                       via='unknown', slot_idx=slot_idx), roi_bin_cropped
 
 
-# ======================================================================
+# ══════════════════════════════════════════════════════════════════════
 #  DEBUG OUTPUT
-# ======================================================================
+# ══════════════════════════════════════════════════════════════════════
 
 def save_debug(bgra_padded: np.ndarray,
                roi_bin_cropped: np.ndarray,
@@ -270,9 +272,9 @@ def save_debug(bgra_padded: np.ndarray,
         cv2.imwrite(os.path.join(DEBUG_DIR, f"{tag}_5_compare.png"), side_bgr)
 
 
-# ======================================================================
+# ══════════════════════════════════════════════════════════════════════
 #  MAIN RECOGNITION CYCLE
-# ======================================================================
+# ══════════════════════════════════════════════════════════════════════
 
 _first_cycle = [True]
 
@@ -305,7 +307,7 @@ def run_cycle(bank: TemplateBank,
         for i, (res, cap) in enumerate(zip(results, captures)):
             if cap:
                 save_debug(cap[0], cap[1], res, bank)
-        log.info(f"Debug images -> {DEBUG_DIR}")
+        log.info(f"Debug images → {DEBUG_DIR}")
 
     for i, (res, cap) in enumerate(zip(results, captures)):
         if not res.accepted and cap:
@@ -324,12 +326,12 @@ def run_cycle(bank: TemplateBank,
             time.sleep(KEYSTROKE_DELAY)
     else:
         failed = [str(i+1) for i, r in enumerate(results) if not r.accepted]
-        log.warning(f"Skipped key press - unknown slot(s): {', '.join(failed)}")
+        log.warning(f"Skipped key press — unknown slot(s): {', '.join(failed)}")
 
 
-# ======================================================================
+# ══════════════════════════════════════════════════════════════════════
 #  ROI CALIBRATION TOOL
-# ======================================================================
+# ══════════════════════════════════════════════════════════════════════
 
 def calibrate_rois() -> None:
     try:
@@ -341,11 +343,11 @@ def calibrate_rois() -> None:
     rois_out: list[list] = []
     collected: set[str]  = set()
 
-    print("=== ROI CALIBRATION ===")
-    print(f"  ROI size: {FIXED_W}x{FIXED_H}  (matches generate_templates.py)")
-    print("  1. Switch to the game window - wait for letters to appear.")
+    print("━━━  ROI CALIBRATION  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    print(f"  ROI size: {FIXED_W}×{FIXED_H}  (matches generate_templates.py)")
+    print("  1. Switch to the game window — wait for letters to appear.")
     print("  2. Hover over the CENTER of each letter.")
-    print("  3. Press 1 -> 5 in order (left to right).")
+    print("  3. Press 1 → 5 in order (left to right).")
     print("  4. After each press, check debug/calib_slotN_final.png")
     print("  Press Q to abort.\n")
 
@@ -365,7 +367,7 @@ def calibrate_rois() -> None:
 
         with mss.mss() as sct:
             bgra    = np.array(sct.grab({"left": x, "top": y,
-                                         "width": FIXED_W, "height": FIXED_H}))
+                                          "width": FIXED_W, "height": FIXED_H}))
             roi_bin = preprocess(bgra)
             white   = np.count_nonzero(roi_bin)
             total   = FIXED_W * FIXED_H
@@ -376,13 +378,13 @@ def calibrate_rois() -> None:
                     roi_bin)
 
         ratio   = white / total
-        quality = "OK" if 0.03 < ratio < 0.75 else "CHECK IMAGE"
+        quality = "✓ OK" if 0.03 < ratio < 0.75 else "⚠ CHECK IMAGE"
         print(f"  Slot {slot_n}: center=({mx},{my})  "
-              f"white={white}/{total} ({ratio:.0%})  [{quality}]")
+              f"white={white}/{total} ({ratio:.0%})  {quality}")
 
         if len(rois_out) == 5:
             _save_rois(rois_out)
-            print(f"\n  Saved -> {os.path.join(BASE_DIR, ROI_FILE)}")
+            print(f"\n  Saved → {os.path.join(BASE_DIR, ROI_FILE)}")
             print("  Run without --calibrate to start the macro.")
             os._exit(0)
 
@@ -405,7 +407,7 @@ def _load_rois() -> list[tuple]:
         for i, r in enumerate(rois):
             log.info(f"  Slot {i+1}: x={r[0]}  y={r[1]}  w={r[2]}  h={r[3]}")
         return rois
-    log.warning(f"{ROI_FILE} not found - using DEFAULT_ROIS. Run --calibrate first!")
+    log.warning(f"{ROI_FILE} not found — using DEFAULT_ROIS. Run --calibrate first!")
     return [tuple(r) for r in DEFAULT_ROIS]
 
 
@@ -416,18 +418,18 @@ if __name__ == '__main__':
         calibrate_rois()
         sys.exit(0)
 
-    log.info("Loading templates...")
+    log.info("Loading templates…")
     bank = TemplateBank.load(TEMPLATE_FILES)
     rois = _load_rois()
 
     log.info("")
     log.info(f"  Confidence threshold : {CONFIDENCE_THRESHOLD}")
     log.info(f"  Margin threshold     : {MARGIN_THRESHOLD}")
-    log.info(f"  Fixed size            : {FIXED_W}x{FIXED_H}")
+    log.info(f"  Fixed size           : {FIXED_W}×{FIXED_H}")
     log.info(f"  Hotkey               : [{HOTKEY.upper()}]")
     log.info(f"  Debug dir            : {DEBUG_DIR}")
     log.info("")
-    log.info(f"Ready - [{HOTKEY.upper()}] trigger | [p] quit")
+    log.info(f"Ready — [{HOTKEY.upper()}] trigger | [p] quit")
 
     keyboard.add_hotkey(
         HOTKEY,
