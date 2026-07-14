@@ -10,13 +10,29 @@ PIPELINE (per slot, ~3 ms total for 5 slots):
 """
 
 from __future__ import annotations
+import sys
+import os
+
+# ── DPI AWARENESS ────────────────────────────────────────────────────────
+# Bắt buộc gọi TRƯỚC khi import mss/pyautogui, và TRƯỚC khi bất kỳ cửa sổ
+# nào được truy vấn. Nếu không có dòng này, trên máy có Windows Display
+# Scaling khác 100% (vd 125%), tọa độ chuột (pyautogui) và ảnh chụp màn
+# hình (mss) sẽ bị lệch nhau, khiến ROI/template sai vị trí hoặc sai size.
+if sys.platform == 'win32':
+    import ctypes
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)  # Per-Monitor DPI Aware
+    except Exception:
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()   # fallback cho Windows cũ
+        except Exception:
+            pass
+
 import cv2
 import numpy as np
 import mss
 import keyboard
 import time
-import os
-import sys
 sys.stdout.reconfigure(encoding='utf-8')
 sys.stderr.reconfigure(encoding='utf-8')
 import json
